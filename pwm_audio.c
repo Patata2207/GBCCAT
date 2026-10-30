@@ -32,6 +32,28 @@
 #include "pwm_audio.h"
 #include "sdkconfig.h"
 
+#if defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32C3)
+// Stubs para ESP32-S3 (donde el hardware LEDC/Timer difiere y se utilizará I2S en ColorDock)
+esp_err_t pwm_audio_init(const pwm_audio_config_t *cfg) { return ESP_OK; }
+esp_err_t pwm_audio_start(void) { return ESP_OK; }
+esp_err_t pwm_audio_write(uint8_t *inbuf, size_t len, size_t *bytes_written, TickType_t ticks_to_wait) {
+    if (bytes_written) *bytes_written = len;
+    return ESP_OK;
+}
+esp_err_t pwm_audio_stop(void) { return ESP_OK; }
+esp_err_t pwm_audio_deinit(void) { return ESP_OK; }
+esp_err_t pwm_audio_set_param(int rate, ledc_timer_bit_t bits, int ch) { return ESP_OK; }
+esp_err_t pwm_audio_set_sample_rate(int rate) { return ESP_OK; }
+esp_err_t pwm_audio_set_volume(int8_t volume) { return ESP_OK; }
+esp_err_t pwm_audio_get_param(int *rate, int *bits, int *ch) { return ESP_OK; }
+esp_err_t pwm_audio_get_status(pwm_audio_status_t *status) {
+    if (status) *status = PWM_AUDIO_STATUS_IDLE;
+    return ESP_OK;
+}
+#define CONFIG_SKIP_PWM_AUDIO 1
+#endif
+
+#ifndef CONFIG_SKIP_PWM_AUDIO
 #define CONFIG_IDF_TARGET_ESP32
 
 #ifndef CONFIG_IDF_TARGET_ESP32S2
@@ -814,3 +836,4 @@ esp_err_t pwm_audio_deinit(void)
     g_pwm_audio_handle = NULL;
     return ESP_OK;
 }
+#endif

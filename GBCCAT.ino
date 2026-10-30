@@ -10,9 +10,18 @@
 #define INCLUDED_LIBRARIES true //better enable this feature!                           
 
 #define LCD_ENABLED true
+
+#if defined(CONFIG_IDF_TARGET_ESP32S3)
+#define COMPOSITE_VIDEO_ENABLED false
+#define KEYBOARD_ENABLED false
+#define SOUND_ENABLED false
+#else
 #define COMPOSITE_VIDEO_ENABLED true  //Do not disable! it also disable ADC.
 #define KEYBOARD_ENABLED true
 #define SOUND_ENABLED true
+#endif
+
+#define USE_EMBEDDED_ROM true // Modo prueba: Carga directamente la ROM embebida en PSRAM
 #define BLUETOOTH_ENABLED false //experimental.
 
 #define DEBUG true       //Serial debugging enable.
@@ -23,6 +32,16 @@
 //********************************************************************************
 
 //KEY BUTTONS PINS:
+#if defined(CONFIG_IDF_TARGET_ESP32S3)
+#define PIN_UP     1
+#define PIN_DOWN   2
+#define PIN_LEFT   3
+#define PIN_RIGHT  4
+#define PIN_A      5
+#define PIN_B      6
+#define PIN_START  7
+#define PIN_SELECT 8
+#else
 #define PIN_UP     39  //SVN
 #define PIN_DOWN   35  //IO35
 #define PIN_LEFT   32 /// 36  //SVP
@@ -31,14 +50,16 @@
 #define PIN_B      14  //TMS
 #define PIN_START  15  //TDO
 #define PIN_SELECT 13  //TCK
+#endif
 
 ///!!! do not forget 1KOHM resistors
 #define KEYBOARD_DATA 4  /// ---[ 1K ]--- // -D
 #define KEYBOARD_CLK 0   /// ---[ 1K ]--- // +D
 
 //COMPOSITE_VIDEO: - //DAC_GPIO25_CHANNEL or DAC_GPIO26_CHANNEL
-
+#if !defined(CONFIG_IDF_TARGET_ESP32S3)
 #define VIDEO_OUT (DAC_GPIO26_CHANNEL)
+#endif
 
 //AUDIO DIRECT OUTPUT:
 #define CONFIG_LEFT_CHANNEL_GPIO 25
@@ -51,11 +72,19 @@
 #define I2S_DI_IO -1           //Not Used
 
 //LCD_ST7789:
+#if defined(CONFIG_IDF_TARGET_ESP32S3)
+#define TFT_CS   -1  // define chip select pin
+#define TFT_DC    9  // define data/command pin
+#define TFT_RST  10  
+#define TFT_MOSI 11  // Data out (SDA)
+#define TFT_SCLK 12  // Clock out (SCL)
+#else
 #define TFT_CS   -1  // define chip select pin
 #define TFT_DC    5  // define data/command pin
 #define TFT_RST  19  
 #define TFT_MOSI 23  // Data out (SDA) //better not change
 #define TFT_SCLK 18  // Clock out (SCL) //better not change
+#endif
 
 //micro_SD_Card: //GPIO16 and GPIO17 can not use on WROVER
 #define SOFTSD_MOSI_PIN 33
@@ -81,12 +110,17 @@ pwm_audio_config_t pac;
 #include <esp_task_wdt.h>
 #include "esp_types.h"
 #include "esp_heap_caps.h"
+#ifndef ps_malloc
+#define ps_malloc(s) heap_caps_malloc((s), MALLOC_CAP_SPIRAM)
+#endif
 #include "esp_attr.h"
 #include "esp_intr_alloc.h"
 #include "esp_err.h"
 #include "soc/gpio_reg.h"
 #include "soc/rtc.h"
 #include "soc/soc.h"
+#include "esp_idf_version.h"
+#if !defined(CONFIG_IDF_TARGET_ESP32S3) && !defined(CONFIG_IDF_TARGET_ESP32C3)
 #include "soc/i2s_struct.h"
 #include "soc/i2s_reg.h"
 #include "soc/ledc_struct.h"
@@ -96,6 +130,7 @@ pwm_audio_config_t pac;
 #include "rom/lldesc.h"
 #include "driver/periph_ctrl.h"
 #include "driver/dac.h"
+#endif
 #include "driver/gpio.h"
 #if SOUND_ENABLED
 #include "driver/i2s.h"
@@ -144,7 +179,7 @@ uint8_t* PSRAM;
 #endif
 
 //player LIBs
-#include "src/ESP32-audioI2S/src/Audio.h" // Use SDFAT-beta...
+///#include "src/ESP32-audioI2S/src/Audio.h" // No requerido para emulador
 
 //--------------------------------------------------------------------------------
 ///#include "arduinoFFT.h" // Standard Arduino FFT library
@@ -191,7 +226,12 @@ Adafruit_ST7789 tft = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_RST);
 
 //--------------------------------------------------------------------------------
 //SPI FLASH MEMORY ACCESS:
+#if __has_include("esp_spi_flash.h")
 #include "esp_spi_flash.h"
+#else
+#include "esp_flash.h"
+#include "spi_flash_mmap.h"
+#endif
 
 #define SPI_FLASH_ADDRESS 0x00300000 //0x00300000 working (empty flash area)
 #define SPI_FLASH_SECTOR_SIZE 0x1000 //4kB = better not change
@@ -439,8 +479,14 @@ void kb_begin() {
 //********************************************************************************
 //================================================================================
 //================================================================================
+#if defined(CONFIG_IDF_TARGET_ESP32S3)
+#define BTN_ACTIVE_LEVEL 0
+#else
+#define BTN_ACTIVE_LEVEL 1
+#endif
+
 void IRAM_ATTR JOY_A_Handler(void) {
-   if (digitalRead(PIN_A)==1) JOY_CROSS=1;
+   if (digitalRead(PIN_A)==BTN_ACTIVE_LEVEL) JOY_CROSS=1;
    else JOY_CROSS=0;
    buttonchange=true;
    if (JOY_CROSS==1) badge_input_button_state |= 1 << 6;
@@ -449,7 +495,7 @@ void IRAM_ATTR JOY_A_Handler(void) {
 }  
 //--------------------------------------------------------------------------------
 void IRAM_ATTR JOY_B_Handler(void) {
-   if (digitalRead(PIN_B)==1) JOY_SQUARE=1;
+   if (digitalRead(PIN_B)==BTN_ACTIVE_LEVEL) JOY_SQUARE=1;
    else JOY_SQUARE=0;
    buttonchange=true;
    if (JOY_SQUARE==1) badge_input_button_state |= 1 << 7;
@@ -458,7 +504,7 @@ void IRAM_ATTR JOY_B_Handler(void) {
 }  
 //--------------------------------------------------------------------------------
 void IRAM_ATTR JOY_START_Handler(void) {
-   if (digitalRead(PIN_START)==1) JOY_SHARE=1;
+   if (digitalRead(PIN_START)==BTN_ACTIVE_LEVEL) JOY_SHARE=1;
    else JOY_SHARE=0;
    buttonchange=true;
    if (JOY_SHARE==1) badge_input_button_state |= 1 << 9;
@@ -467,7 +513,7 @@ void IRAM_ATTR JOY_START_Handler(void) {
 }  
 //--------------------------------------------------------------------------------
 void IRAM_ATTR JOY_SELECT_Handler(void) {
-   if (digitalRead(PIN_SELECT)==1) JOY_OPTIONS=1;
+   if (digitalRead(PIN_SELECT)==BTN_ACTIVE_LEVEL) JOY_OPTIONS=1;
    else JOY_OPTIONS=0;
    buttonchange=true;
    if (JOY_OPTIONS==1) badge_input_button_state |= 1 << 8;
@@ -476,7 +522,7 @@ void IRAM_ATTR JOY_SELECT_Handler(void) {
 }  
 //--------------------------------------------------------------------------------
 void IRAM_ATTR JOY_UP_Handler(void) {
-   if (digitalRead(PIN_UP)==1) JOY_UP=1;
+   if (digitalRead(PIN_UP)==BTN_ACTIVE_LEVEL) JOY_UP=1;
    else JOY_UP=0;
    buttonchange=true;
    if (JOY_UP==1) badge_input_button_state |= 1 << 1;
@@ -485,7 +531,7 @@ void IRAM_ATTR JOY_UP_Handler(void) {
 }  
 //--------------------------------------------------------------------------------
 void IRAM_ATTR JOY_DOWN_Handler(void) {
-   if (digitalRead(PIN_DOWN)==1) JOY_DOWN=1;
+   if (digitalRead(PIN_DOWN)==BTN_ACTIVE_LEVEL) JOY_DOWN=1;
    else JOY_DOWN=0;
    buttonchange=true;
    if (JOY_DOWN==1) badge_input_button_state |= 1 << 2;
@@ -494,7 +540,7 @@ void IRAM_ATTR JOY_DOWN_Handler(void) {
 }  
 //--------------------------------------------------------------------------------
 void IRAM_ATTR JOY_LEFT_Handler(void) {
-   if (digitalRead(PIN_LEFT)==1) JOY_LEFT=1;
+   if (digitalRead(PIN_LEFT)==BTN_ACTIVE_LEVEL) JOY_LEFT=1;
    else JOY_LEFT=0;
    buttonchange=true;
    if (JOY_LEFT==1) badge_input_button_state |= 1 << 3;
@@ -503,7 +549,7 @@ void IRAM_ATTR JOY_LEFT_Handler(void) {
 }  
 //--------------------------------------------------------------------------------
 void IRAM_ATTR JOY_RIGHT_Handler(void) {
-   if (digitalRead(PIN_RIGHT)==1) JOY_RIGHT=1;
+   if (digitalRead(PIN_RIGHT)==BTN_ACTIVE_LEVEL) JOY_RIGHT=1;
    else JOY_RIGHT=0;
    buttonchange=true;
    if (JOY_RIGHT==1) badge_input_button_state |= 1 << 4;
@@ -516,15 +562,6 @@ void IRAM_ATTR JOY_RIGHT_Handler(void) {
 
 
 #include <esp_task_wdt.h>
-
-/*
-extern "C" {
-extern const unsigned char game_rom[];
-extern const unsigned int game_rom_len;
-extern void burnin();
-};
-*/
-
 
 //===============================================================================
 //INCLUDES:
@@ -692,46 +729,7 @@ void draw_string(char *c, uint8_t color = 48) {
 }
 
 //--------------------------------------------------------------------------------
-extern "C" void pwm_audio_write_(uint8_t *inbuf, size_t len, size_t *bytes_written, TickType_t ticks_to_wait) {
-   pwm_audio_write(inbuf, len, bytes_written, ticks_to_wait);
-}
-//--------------------------------------------------------------------------------
-//--------------------------------------------------------------------------------
 uint8_t DEFAULTPAL=0;
-
-//--------------------------------------------------------------------------------
-extern "C" int lcd_write_frame(const uint16_t x, const uint16_t y, const uint16_t width, const uint16_t height) {
-  uint8_t n, l;
-  uint16_t i, len;
-  uint16_t w = TFT_WIDTH;
-  uint16_t h = TFT_HEIGHT;
-  uint16_t X_ = 0;
-
-  for (i = 0; i < height; i++) {
-///    uint16_t horizontal_offset = 8;
-    for (X_ = 0; X_ < width; X_++) { //not 256 the 240
-      if (DEFAULTPAL==0)
-        SCREENBUFFER[X_] = nes_16bit[(0x3F & ((uint8_t *)SCREENMEMORY[i])[X_])];
-      else 
-        SCREENBUFFER[X_] = gbc_16bit[(0x3F & ((uint8_t *)SCREENMEMORY[i])[X_])];
-    }
-
-
-
-    ///PAL optimalisation in this case:
-    tft.drawRGBBitmap(0, i, (uint16_t *)(SCREENBUFFER), 48, 1);
-    tft.drawRGBBitmap(48, i, (uint16_t *)(SCREENBUFFER + 48), 48, 1);
-    tft.drawRGBBitmap(96, i, (uint16_t *)(SCREENBUFFER + 96), 48, 1);
-    tft.drawRGBBitmap(144, i, (uint16_t *)(SCREENBUFFER + 144), 48, 1);
-    tft.drawRGBBitmap(192, i, (uint16_t *)(SCREENBUFFER + 192), 48, 1);
-  }
-}
-//--------------------------------------------------------------------------------
-
-
-
-
-
 
 //--------------------------------------------------------------------------------
 char loadmessage[64];
@@ -928,35 +926,35 @@ char* GBCEXPLORE(char* PATH) {
 
     //PROCESS CURSOR SELECTION
     while (JOY_CROSS == 0 && JOY_SQUARE == 0 && JOY_OPTIONS == 0 && JOY_SHARE == 0 && JOY_UP == 0 && JOY_DOWN == 0 && JOY_LEFT == 0 && JOY_RIGHT == 0) {
-      if (digitalRead(PIN_A) == 1) {
+      if (digitalRead(PIN_A) == BTN_ACTIVE_LEVEL) {
         JOY_CROSS = 1;  //A
         delay(25);
       }
-      if (digitalRead(PIN_B) == 1) {
+      if (digitalRead(PIN_B) == BTN_ACTIVE_LEVEL) {
         JOY_SQUARE = 1;   //B
         delay(25);
       }
-      if (digitalRead(PIN_SELECT) == 1) {
+      if (digitalRead(PIN_SELECT) == BTN_ACTIVE_LEVEL) {
         JOY_OPTIONS = 1;   //SELECT
         delay(25);
       }
-      if (digitalRead(PIN_START) == 1) {
+      if (digitalRead(PIN_START) == BTN_ACTIVE_LEVEL) {
         JOY_SHARE = 1;   //START
         delay(25);
       }
-      if (digitalRead(PIN_UP) == 1) {
+      if (digitalRead(PIN_UP) == BTN_ACTIVE_LEVEL) {
         JOY_UP = 1;
         delay(25);
       }
-      if (digitalRead(PIN_DOWN) == 1) {
+      if (digitalRead(PIN_DOWN) == BTN_ACTIVE_LEVEL) {
         JOY_DOWN = 1;   //DOWN
         delay(25);
       }
-      if (digitalRead(PIN_LEFT) == 1) {
+      if (digitalRead(PIN_LEFT) == BTN_ACTIVE_LEVEL) {
         JOY_LEFT = 1;   //LEFT
         delay(25);
       }
-      if (digitalRead(PIN_RIGHT) == 1) {
+      if (digitalRead(PIN_RIGHT) == BTN_ACTIVE_LEVEL) {
         JOY_RIGHT = 1;   //RIGHT
         delay(25);
       }
@@ -1107,6 +1105,11 @@ char* GBCBrowse(char* PATH) {
 
 
 
+#if USE_EMBEDDED_ROM
+extern const uint8_t embedded_game_rom[] asm("embedded_game_rom");
+extern const unsigned int embedded_game_rom_len asm("embedded_game_rom_len");
+#endif
+
 unsigned char* game_rom;
 unsigned int game_rom_len;
 
@@ -1132,6 +1135,9 @@ void setup()
    }
    
 //--------------------------------------------------------------------------------
+#if defined(CONFIG_IDF_TARGET_ESP32S3)
+   SPI.begin(TFT_SCLK, -1, TFT_MOSI, TFT_CS);
+#endif
    // if the display has CS pin try with SPI_MODE0
    tft.init(240, 240, SPI_MODE2);    // Init ST7789 display 240x240 pixel
    // if the screen is flipped, remove this command
@@ -1162,6 +1168,16 @@ void setup()
 //--------------------------------------------------------------------------------
 //--------------------------------------------------------------------------------
    //Buttons Pins Input Init
+#if defined(CONFIG_IDF_TARGET_ESP32S3)
+   pinMode(PIN_A, INPUT_PULLUP);    //A
+   pinMode(PIN_B, INPUT_PULLUP);   //B
+   pinMode(PIN_SELECT, INPUT_PULLUP);   //SELECT
+   pinMode(PIN_START, INPUT_PULLUP);   //START
+   pinMode(PIN_UP, INPUT_PULLUP);    //UP
+   pinMode(PIN_DOWN, INPUT_PULLUP);   //DOWN
+   pinMode(PIN_LEFT, INPUT_PULLUP);       //LEFT
+   pinMode(PIN_RIGHT, INPUT_PULLUP);  //RIGHT
+#else
    pinMode(PIN_A, INPUT);    //A
    pinMode(PIN_B, INPUT);   //B
    pinMode(PIN_SELECT, INPUT);   //SELECT
@@ -1170,7 +1186,7 @@ void setup()
    pinMode(PIN_DOWN, INPUT);   //DOWN  //TCK
    pinMode(PIN_LEFT, INPUT);       //LEFT
    pinMode(PIN_RIGHT, INPUT);  //RIGHT
-//--------------------------------------------------------------------------------
+
    digitalWrite(PIN_A, 0);
    digitalWrite(PIN_B, 0);
    digitalWrite(PIN_SELECT, 0);
@@ -1179,6 +1195,7 @@ void setup()
    digitalWrite(PIN_DOWN, 0);
    digitalWrite(PIN_LEFT, 0);
    digitalWrite(PIN_RIGHT, 0);
+#endif
 //--------------------------------------------------------------------------------
    attachInterrupt(digitalPinToInterrupt(PIN_A), JOY_A_Handler, CHANGE);
    attachInterrupt(digitalPinToInterrupt(PIN_B), JOY_B_Handler, CHANGE);
@@ -1197,11 +1214,7 @@ void setup()
 //--------------------------------------------------------------------------------
 //--------------------------------------------------------------------------------
 
-   
-
-   ///pwm_audio_deinit();
-
-   ///pwm_audio_config_t pac;
+#if SOUND_ENABLED
    pac.duty_resolution    = LEDC_TIMER_10_BIT;
    pac.gpio_num_left      = CONFIG_LEFT_CHANNEL_GPIO;
    pac.ledc_channel_left  = LEDC_CHANNEL_0;
@@ -1213,22 +1226,20 @@ void setup()
    pac.ringbuf_len        = 1024 * 8; /// default: 1024*8
    pwm_audio_init(&pac);
 
-   ///  pwm_audio_set_param(wave_framerate, (ledc_timer_bit_t)wave_bits, wave_ch);
-   //FOR MP3:
-   ///  pwm_audio_set_param(46000, (ledc_timer_bit_t)16, 2);
-   //FOR NES:
    pwm_audio_set_param(8000, (ledc_timer_bit_t)16, 1);
    pwm_audio_start();
    pwm_audio_set_volume(0);
 
-
    Serial.print("RATE: ");      
    Serial.println(8000);      
+#endif
 
 //--------------------------------------------------------------------------------
    // disable Core 0 WDT
+#if ESP_IDF_VERSION_MAJOR < 5
    TaskHandle_t idle_0 = xTaskGetIdleTaskHandleForCPU(0);
    esp_task_wdt_delete(idle_0);
+#endif
 
 
 }
@@ -1243,6 +1254,19 @@ GBC_EXIT=0;
 
    Serial.println("GBC_POWER: ##################");
 
+#if USE_EMBEDDED_ROM
+   Serial.println("Loading embedded ROM into PSRAM...");
+   game_rom_len = embedded_game_rom_len;
+   game_rom = (unsigned char *)ps_malloc(game_rom_len);
+   if (!game_rom) {
+      Serial.println("Error: Failed to allocate PSRAM for ROM! Check PSRAM configuration.");
+      while (1) { delay(1000); }
+   }
+   memcpy(game_rom, embedded_game_rom, game_rom_len);
+   Serial.print("ROM loaded into PSRAM: ");
+   Serial.print(game_rom_len);
+   Serial.println(" bytes.");
+#else
    sprintf(MAINPATH, "/GBC/"); ///must be malloc(256);
 
    for (uint16_t tmp = 0; tmp < MAXFILES; tmp++) filename[tmp] = (char*)calloc(MAXFILENAME_LENGTH, sizeof(char));
@@ -1275,6 +1299,7 @@ GBC_EXIT=0;
    
    game_rom_len=len;
 //----------------------------------------
+#endif
 
 DEFAULTPAL=1;
 
@@ -1317,4 +1342,29 @@ void sys_sleep(int us) {
 
 unsigned long sys_micros() {
   return micros();
+}
+
+extern "C" void pwm_audio_write_(uint8_t *inbuf, size_t len, size_t *bytes_written, TickType_t ticks_to_wait) {
+   pwm_audio_write(inbuf, len, bytes_written, ticks_to_wait);
+}
+
+extern "C" int lcd_write_frame(const uint16_t x, const uint16_t y, const uint16_t width, const uint16_t height) {
+  uint16_t i;
+  uint16_t X_ = 0;
+
+  for (i = 0; i < height; i++) {
+    for (X_ = 0; X_ < width; X_++) {
+      if (DEFAULTPAL==0)
+        SCREENBUFFER[X_] = nes_16bit[(0x3F & ((uint8_t *)SCREENMEMORY[i])[X_])];
+      else
+        SCREENBUFFER[X_] = gbc_16bit[(0x3F & ((uint8_t *)SCREENMEMORY[i])[X_])];
+    }
+
+    tft.drawRGBBitmap(0, i, (uint16_t *)(SCREENBUFFER), 48, 1);
+    tft.drawRGBBitmap(48, i, (uint16_t *)(SCREENBUFFER + 48), 48, 1);
+    tft.drawRGBBitmap(96, i, (uint16_t *)(SCREENBUFFER + 96), 48, 1);
+    tft.drawRGBBitmap(144, i, (uint16_t *)(SCREENBUFFER + 144), 48, 1);
+    tft.drawRGBBitmap(192, i, (uint16_t *)(SCREENBUFFER + 192), 48, 1);
+  }
+  return 0;
 }

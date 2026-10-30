@@ -24,7 +24,7 @@
 #ifndef _Adafruit_MONOOLED_H_
 #define _Adafruit_MONOOLED_H_
 
-#if !defined(__AVR_ATtiny85__) // Not for ATtiny, at all
+#if 0 // Desactivado para ColorDock (no se usan OLEDs monocromaticos ni BusIO)
 
 #include "Adafruit_GFX.h"
 #include <Adafruit_I2CDevice.h>

@@ -3,3 +3,6 @@ game.c
 *.rom
 tags
 *.bin
+*.gbc
+*.gb
+game_rom.*

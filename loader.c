@@ -161,7 +161,7 @@ int rom_load(const byte * data, int len)
 	if (rlen != len)
 		die("ROM len %d != image len %d\n", rlen, len);
 
-	rom.bank = data;
+	rom.bank = (byte (*)[16384])data;
 	ram.sbank = malloc(8192 * mbc.ramsize);
 	printf("%s: ram.sbank=%p\n", __func__, ram.sbank);
 	if (!ram.sbank)

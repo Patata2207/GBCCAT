@@ -15,7 +15,7 @@
  *
  */
 
-#if !defined(__AVR_ATtiny85__) // Not for ATtiny, at all
+#if 0 // Desactivado para ColorDock
 
 #include "Adafruit_MonoOLED.h"
 #include "Adafruit_GFX.h"

@@ -8,6 +8,16 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 #include <freertos/task.h>
+#include "esp_heap_caps.h"
+
+#ifndef ps_malloc
+#define ps_malloc(s) heap_caps_malloc((s), MALLOC_CAP_SPIRAM)
+#endif
+#ifndef ps_calloc
+#define ps_calloc(n, s) heap_caps_calloc((n), (s), MALLOC_CAP_SPIRAM)
+#endif
+
+extern int lcd_write_frame(const uint16_t x, const uint16_t y, const uint16_t width, const uint16_t height);
 
 #define GB_WIDTH 160
 #define GB_HEIGHT 144
@@ -72,7 +82,7 @@ struct fb fb;
 int pcm_submit() { 
    if (pcm.buf)  {
       if (pcm.pos >= pcm.len) pcm.pos = pcm.len;
-      size_t *bytes_written_=0;
+      size_t bytes_written_=0;
       pwm_audio_write_((uint8_t*)pcm.buf, pcm.pos ,&bytes_written_, 1);
       pcm.pos=0;
    } else {

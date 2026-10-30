@@ -1,0 +1,9 @@
+[wokwi]
+version = 1
+firmware = "build/esp32.esp32.esp32s3/GBCCAT.ino.bin"
+elf = "build/esp32.esp32.esp32s3/GBCCAT.ino.elf"
+
+[esp32-s3]
+# Habilitamos PSRAM Octal, crítica para almacenar los juegos de Game Boy Color
+psram = "octal"
+
